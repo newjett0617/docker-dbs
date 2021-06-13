@@ -1,41 +1,128 @@
 version: "3"
 
+x-basic-setting: &basic-setting
+  init: true
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "2G"
+      max-file: "2"
+      compress: "true"
+  healthcheck:
+    interval: 30s
+    timeout: 30s
+    start_period: 10s
+    retries: 3
+
 volumes:
-  my-volume:
-    name: my-volume
+  mysql:
+    name: mysql
+    driver: local
+  pgsql:
+    name: pgsql
+    driver: local
+  redis:
+    name: redis
+    driver: local
+  redisinsight:
+    name: redisinsight
     driver: local
 
 networks:
-  my-network:
-    name: my-network
+  mysql:
+    name: mysql
     driver: bridge
-    internal: true
+    external: true
+  pgsql:
+    name: pgsql
+    driver: bridge
+    external: true
+  redis:
+    name: redis
+    driver: bridge
+    external: true
 
 services:
-  my-app:
-    image: docker.io/library/nginx:alpine
-    init: true
-    container_name: my-app
-    restart: unless-stopped
+  mysql:
+    <<: *basic-setting
+    image: docker.io/newjett0617/mysql:5.7
+    container_name: mysql
     networks:
-      - my-network
+      - mysql
     expose:
-      - 80
+      - 3306
     ports:
-      - 80:80
+      - 0.0.0.0:3306:3306
     environment:
-      - foo=bar
+      - MYSQL_ROOT_PASSWORD=${_MYSQL_PASSWORD}
     volumes:
-      - my-volume:/etc/nginx:rw
-    logging:
-      driver: json-file
-      options:
-        max-size: "200k"
-        max-file: "10"
-        compress: "true"
-    healthcheck:
-      test: [ "CMD-SHELL", "curl --fail http://localhost" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      - mysql:/var/lib/mysql:rw
+      - ./mysql/5.7/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+
+  pgsql:
+    <<: *basic-setting
+    image: docker.io/newjett0617/postgres:13-alpine
+    container_name: pgsql
+    networks:
+      - pgsql
+    expose:
+      - 5432
+    ports:
+      - 0.0.0.0:5432:5432
+    environment:
+      - POSTGRES_PASSWORD=${_PGSQL_PASSWORD}
+    volumes:
+      - pgsql:/var/lib/postgresql/data:rw
+
+  redis:
+    <<: *basic-setting
+    image: docker.io/newjett0617/redis:6-alpine
+    container_name: redis
+    networks:
+      - redis
+    expose:
+      - 6379
+    ports:
+      - 0.0.0.0:6379:6379
+    volumes:
+      - redis:/data:rw
+
+  adminer:
+    <<: *basic-setting
+    image: docker.io/library/adminer:4-standalone
+#    image: docker.io/library/adminer:4-fastcgi
+    container_name: adminer
+    networks:
+      - mysql
+      - pgsql
+    expose:
+      - 8080
+    ports:
+      - 0.0.0.0:8080:8080
+
+  redisinsight:
+    <<: *basic-setting
+    image: docker.io/redislabs/redisinsight:latest
+    container_name: redisinsight
+    networks:
+      - redis
+    expose:
+      - 8001
+    ports:
+      - 0.0.0.0:8001:8001
+    volumes:
+      - redisinsight:/db:rw
+
+  rediscommander:
+    <<: *basic-setting
+    image: docker.io/rediscommander/redis-commander:latest
+    container_name: rediscommander
+    networks:
+      - redis
+    expose:
+      - 8081
+    ports:
+      - 0.0.0.0:8081:8081
+    environment:
+      - REDIS_HOSTS=local:redis:6379
