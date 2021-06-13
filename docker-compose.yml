@@ -1,0 +1,41 @@
+version: "3"
+
+volumes:
+  my-volume:
+    name: my-volume
+    driver: local
+
+networks:
+  my-network:
+    name: my-network
+    driver: bridge
+    internal: true
+
+services:
+  my-app:
+    image: docker.io/library/nginx:alpine
+    init: true
+    container_name: my-app
+    restart: unless-stopped
+    networks:
+      - my-network
+    expose:
+      - 80
+    ports:
+      - 80:80
+    environment:
+      - foo=bar
+    volumes:
+      - my-volume:/etc/nginx:rw
+    logging:
+      driver: json-file
+      options:
+        max-size: "200k"
+        max-file: "10"
+        compress: "true"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl --fail http://localhost" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
